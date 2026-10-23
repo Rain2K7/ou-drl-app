@@ -50,7 +50,7 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 
 // --- HÌNH NỀN MẶC ĐỊNH MỚI CỦA APP ---
-const DEFAULT_APP_BG = "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&q=80&w=1000"; 
+const DEFAULT_APP_BG = "blob:https://gemini.google.com/2ca4e919-7f7f-4551-b1a3-635094109e45"; 
 
 // --- QUY ĐỊNH ĐIỂM RÈN LUYỆN OU (5 ĐIỀU) ---
 const OU_CRITERIA_GROUPS = [
