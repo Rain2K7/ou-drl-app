@@ -23,9 +23,7 @@ import {
   Palette, 
   PlusCircle, 
   Trash2, 
-  FileText, 
   Paperclip,
-  CheckSquare,
   Eye,
   EyeOff,
   UserPlus,
@@ -33,8 +31,7 @@ import {
   Heart,
   Calendar,
   Layers,
-  ChevronRight,
-  Upload
+  ChevronRight
 } from 'lucide-react';
 
 // --- FIREBASE INITIALIZATION THẬT (PROJECT: rainer-88e5f) ---
@@ -52,6 +49,9 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'ou-drl-app';
+
+// --- HÌNH NỀN MẶC ĐỊNH MỚI CỦA APP ---
+const DEFAULT_APP_BG = "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&q=80&w=1000"; 
 
 // --- QUY ĐỊNH ĐIỂM RÈN LUYỆN OU (5 ĐIỀU) ---
 const OU_CRITERIA_GROUPS = [
@@ -524,15 +524,19 @@ export default function App() {
   const currentGroupTotals = calculateGroupTotals(currentSemKey);
   const currentSemesterScore = calculateSemesterTotal(currentSemKey);
 
-  const bgStyle = studentInfo.customBgUrl 
-    ? { backgroundImage: `url(${studentInfo.customBgUrl})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }
-    : { background: 'linear-gradient(135deg, #fff0f5 0%, #ffe4e1 35%, #fff8dc 100%)' };
+  // STYLE NỀN MẶC ĐỊNH
+  const activeBg = studentInfo.customBgUrl || DEFAULT_APP_BG;
+  const bgStyle = {
+    backgroundImage: `url(${activeBg})`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    backgroundAttachment: 'fixed'
+  };
 
   return (
     <div className="min-h-screen text-slate-800 font-sans relative transition-all duration-300 pb-20" style={bgStyle}>
-      {studentInfo.customBgUrl && (
-        <div className="fixed inset-0 bg-white/75 backdrop-blur-[2px] pointer-events-none z-0"></div>
-      )}
+      {/* LỚP PHỦ NỀN TRONG SUỐT ĐỂ GIỮ CHỮ VÀ BẢNG MỜ RÕ NÉT */}
+      <div className="fixed inset-0 bg-white/60 backdrop-blur-[3px] pointer-events-none z-0"></div>
 
       {/* TOAST MESSAGE */}
       {toastMessage && (
@@ -762,7 +766,7 @@ export default function App() {
                   <div className="mt-4 pt-3 border-t border-slate-100">
                     <label className="w-full py-2 px-3 rounded-xl bg-yellow-100/70 hover:bg-yellow-200/70 text-amber-800 text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer transition">
                       <Palette className="w-4 h-4 text-amber-600" />
-                      {studentInfo.customBgUrl ? 'Thay Nền Cá Nhân' : 'Upload Hình Nền Cá Nhân'}
+                      {studentInfo.customBgUrl ? 'Thay Nền Cá Nhân' : 'Upload Hình Nền Tùy Chỉnh'}
                       <input type="file" accept="image/*" onChange={handleBgUpload} className="hidden" />
                     </label>
                     {studentInfo.customBgUrl && (
@@ -770,7 +774,7 @@ export default function App() {
                         onClick={() => setStudentInfo(p => ({ ...p, customBgUrl: '' }))}
                         className="text-[10px] text-pink-500 hover:underline mt-1.5 block mx-auto"
                       >
-                        Khôi phục Theme Mây Hồng Mặc Định
+                        Khôi phục Nền Mặc Định
                       </button>
                     )}
                   </div>
