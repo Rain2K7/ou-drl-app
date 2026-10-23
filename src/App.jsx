@@ -34,7 +34,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 
-// --- FIREBASE INITIALIZATION THẬT (PROJECT: rainer-88e5f) ---
+// --- FIREBASE INITIALIZATION ---
 const firebaseConfig = {
   apiKey: "AIzaSyA6_FZejbBAHSTCeaypdDx9YDGsDywKIYc",
   authDomain: "rainer-88e5f.firebaseapp.com",
@@ -48,7 +48,6 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'ou-drl-app';
 
 // --- HÌNH NỀN MẶC ĐỊNH MỚI CỦA APP ---
 const DEFAULT_APP_BG = "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&q=80&w=1000"; 
@@ -130,7 +129,7 @@ export default function App() {
 
   // Thông tin sinh viên
   const [studentInfo, setStudentInfo] = useState({
-    name: 'Sinh Viên OU Cute',
+    name: 'Sinh Viên OU',
     mssv: '',
     class: '25DH1101',
     major: 'Công Nghệ Thông Tin',
@@ -159,18 +158,12 @@ export default function App() {
     evidenceType: ''
   });
 
-  // Tải danh sách tài khoản đã nhớ từ localStorage
+  // Tải danh sách tài khoản đã lưu local
   useEffect(() => {
     try {
-      const stored = localStorage.getItem('ou_saved_accounts_v2');
+      const stored = localStorage.getItem('ou_saved_accounts_v3');
       if (stored) {
         setSavedAccounts(JSON.parse(stored));
-      } else {
-        const initialSample = [
-          { mssv: '2551070017', name: 'Phan Trung Hiếu', class: '25DH1101', pass: '123456' }
-        ];
-        setSavedAccounts(initialSample);
-        localStorage.setItem('ou_saved_accounts_v2', JSON.stringify(initialSample));
       }
     } catch (e) {
       console.error(e);
@@ -207,34 +200,12 @@ export default function App() {
     setSavedAccounts(prev => {
       const filtered = prev.filter(a => a.mssv !== accountObj.mssv);
       const updated = [accountObj, ...filtered];
-      localStorage.setItem('ou_saved_accounts_v2', JSON.stringify(updated));
+      localStorage.setItem('ou_saved_accounts_v3', JSON.stringify(updated));
       return updated;
     });
   };
 
-  const fetchCloudData = async (targetMssv) => {
-    if (!user || !targetMssv) return;
-    setLoading(true);
-    try {
-      const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'ou_accounts', targetMssv);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        if (data.studentInfo) setStudentInfo(data.studentInfo);
-        if (data.semestersData) setSemestersData(data.semestersData);
-        showToast('🌸 Đã tải dữ liệu & minh chứng từ Cloud thành công!');
-        return data;
-      } else {
-        showToast('✨ Tạo mới không gian lưu trữ cho MSSV trên Cloud!');
-      }
-    } catch (err) {
-      console.error("Fetch Cloud error:", err);
-      showToast('❌ Kết nối Firestore thất bại!', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // --- ĐĂNG KÝ TÀI KHOẢN MỚI TRÊN CLOUD ---
   const handleRegister = async (e) => {
     e.preventDefault();
     if (!authMssv || !authPassword || !authName) {
@@ -243,32 +214,43 @@ export default function App() {
     }
 
     if (authMssv.length < 8) {
-      showToast('MSSV chưa đúng định dạng!', 'error');
+      showToast('MSSV phải từ 8 ký tự trở lên!', 'error');
       return;
     }
 
     setLoading(true);
-    const newStudentInfo = {
-      name: authName,
-      mssv: authMssv,
-      class: authClass,
-      major: authMajor,
-      avatarUrl: '',
-      customBgUrl: ''
-    };
-
     try {
-      if (user) {
-        const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'ou_accounts', authMssv);
-        await setDoc(docRef, {
-          mssv: authMssv,
-          password: authPassword,
-          studentInfo: newStudentInfo,
-          semestersData: initializeDefaultSemesters(),
-          createdAt: new Date().toISOString()
-        });
+      // 1. Kiểm tra tài khoản đã tồn tại trên Cloud chưa
+      const userDocRef = doc(db, 'ou_users', authMssv);
+      const docSnap = await getDoc(userDocRef);
+
+      if (docSnap.exists()) {
+        showToast('⚠️ MSSV này đã được đăng ký! Vui lòng chuyển sang Đăng Nhập.', 'error');
+        setLoading(false);
+        return;
       }
 
+      const initialInfo = {
+        name: authName,
+        mssv: authMssv,
+        class: authClass,
+        major: authMajor,
+        avatarUrl: '',
+        customBgUrl: ''
+      };
+
+      const defaultSemData = initializeDefaultSemesters();
+
+      // 2. Tạo mới tài khoản trên Cloud Firestore
+      await setDoc(userDocRef, {
+        mssv: authMssv,
+        password: authPassword,
+        studentInfo: initialInfo,
+        semestersData: defaultSemData,
+        createdAt: new Date().toISOString()
+      });
+
+      // 3. Cập nhật giao diện
       saveAccountToLocal({
         mssv: authMssv,
         name: authName,
@@ -276,17 +258,19 @@ export default function App() {
         pass: authPassword
       });
 
-      setStudentInfo(newStudentInfo);
+      setStudentInfo(initialInfo);
+      setSemestersData(defaultSemData);
       setIsLoggedIn(true);
-      showToast('🎉 Đăng ký thành công! Dữ liệu đã sẵn sàng trên Cloud!');
+      showToast('🎉 Đăng ký tài khoản Cloud thành công!');
     } catch (err) {
       console.error("Register Error:", err);
-      showToast('❌ Lỗi đăng ký tài khoản!', 'error');
+      showToast('❌ Lỗi kết nối Firestore khi đăng ký!', 'error');
     } finally {
       setLoading(false);
     }
   };
 
+  // --- ĐĂNG NHẬP (KIỂM TRA CHÍNH XÁC MẬT KHẨU TỪ CLOUD) ---
   const handleLogin = async (e) => {
     e.preventDefault();
     if (!authMssv || !authPassword) {
@@ -296,30 +280,41 @@ export default function App() {
 
     setLoading(true);
     try {
-      const matchedLocal = savedAccounts.find(a => a.mssv === authMssv);
-      
+      // 1. Tìm tài khoản trên Cloud Firestore
+      const userDocRef = doc(db, 'ou_users', authMssv);
+      const docSnap = await getDoc(userDocRef);
+
+      if (!docSnap.exists()) {
+        showToast('❌ Tài khoản chưa đăng ký trên app! Vui lòng chuyển sang Đăng Ký Mới.', 'error');
+        setLoading(false);
+        return;
+      }
+
+      const userData = docSnap.data();
+
+      // 2. Kiểm tra mật khẩu
+      if (userData.password !== authPassword) {
+        showToast('❌ Sai mật khẩu! Vui lòng kiểm tra lại.', 'error');
+        setLoading(false);
+        return;
+      }
+
+      // 3. Đăng nhập thành công -> Tải toàn bộ dữ liệu đã lưu từ Cloud
+      if (userData.studentInfo) setStudentInfo(userData.studentInfo);
+      if (userData.semestersData) setSemestersData(userData.semestersData);
+
       saveAccountToLocal({
         mssv: authMssv,
-        name: matchedLocal?.name || 'Sinh Viên OU',
-        class: matchedLocal?.class || '25DH1101',
+        name: userData.studentInfo?.name || 'Sinh Viên OU',
+        class: userData.studentInfo?.class || '25DH1101',
         pass: authPassword
       });
 
-      setStudentInfo(prev => ({
-        ...prev,
-        mssv: authMssv,
-        name: matchedLocal?.name || 'Sinh Viên OU'
-      }));
-
-      if (user) {
-        await fetchCloudData(authMssv);
-      }
-
       setIsLoggedIn(true);
-      showToast('💖 Đăng nhập thành công!');
+      showToast('💖 Đăng nhập thành công! Dữ liệu Cloud đã tải nguyên vẹn.');
     } catch (err) {
-      console.error(err);
-      showToast('❌ Đăng nhập không thành công!', 'error');
+      console.error("Login Error:", err);
+      showToast('❌ Không thể kết nối với Firestore!', 'error');
     } finally {
       setLoading(false);
     }
@@ -327,30 +322,30 @@ export default function App() {
 
   const handleSelectAutoFillAccount = (acc) => {
     setAuthMssv(acc.mssv);
-    setAuthPassword(acc.pass || '123456');
+    setAuthPassword(acc.pass || '');
     if (acc.name) setAuthName(acc.name);
     setShowAutoFillModal(false);
-    showToast(`✨ Đã tự động điền thông tin tài khoản ${acc.mssv}!`);
+    showToast(`✨ Đã tự động điền tài khoản ${acc.mssv}!`);
   };
 
+  // --- LƯU TOÀN BỘ ĐIỂM SỐ & MINH CHỨNG LÊN CLOUD ---
   const handleSaveToCloud = async () => {
-    if (!user || !studentInfo.mssv) {
-      showToast('Cần có MSSV để lưu trữ!', 'error');
+    if (!studentInfo.mssv) {
+      showToast('Không tìm thấy thông tin MSSV!', 'error');
       return;
     }
     setLoading(true);
     try {
-      const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'ou_accounts', studentInfo.mssv);
-      await setDoc(docRef, {
-        mssv: studentInfo.mssv,
+      const userDocRef = doc(db, 'ou_users', studentInfo.mssv);
+      await setDoc(userDocRef, {
         studentInfo,
         semestersData,
         updatedAt: new Date().toISOString()
       }, { merge: true });
 
-      showToast('☁️ Đã sao lưu toàn bộ Học kỳ & Minh chứng lên Firestore!');
+      showToast('☁️ Đã sao lưu thành công toàn bộ Bảng điểm & Minh chứng lên Firestore!');
     } catch (err) {
-      console.error(err);
+      console.error("Save Cloud Error:", err);
       showToast('❌ Lỗi khi đồng bộ Firestore!', 'error');
     } finally {
       setLoading(false);
@@ -379,7 +374,7 @@ export default function App() {
     if (!file) return;
 
     if (file.size > 2.5 * 1024 * 1024) {
-      showToast('Dung lượng file tối đa 2.5MB để lưu Cloud mượt mà!', 'error');
+      showToast('Dung lượng file tối đa 2.5MB!', 'error');
       return;
     }
 
@@ -432,7 +427,7 @@ export default function App() {
       evidenceData: '',
       evidenceType: ''
     });
-    showToast('✨ Thêm nhiệm vụ & đính kèm minh chứng thành công!');
+    showToast('✨ Thêm nhiệm vụ & minh chứng thành công!');
   };
 
   const handleDeleteTask = (taskId) => {
@@ -455,7 +450,7 @@ export default function App() {
       const reader = new FileReader();
       reader.onloadend = () => {
         setStudentInfo(prev => ({ ...prev, avatarUrl: reader.result }));
-        showToast('✨ Đã cập nhật Avatar cá nhân!');
+        showToast('✨ Đã cập nhật Avatar!');
       };
       reader.readAsDataURL(file);
     }
@@ -524,7 +519,6 @@ export default function App() {
   const currentGroupTotals = calculateGroupTotals(currentSemKey);
   const currentSemesterScore = calculateSemesterTotal(currentSemKey);
 
-  // STYLE NỀN MẶC ĐỊNH
   const activeBg = studentInfo.customBgUrl || DEFAULT_APP_BG;
   const bgStyle = {
     backgroundImage: `url(${activeBg})`,
@@ -535,7 +529,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen text-slate-800 font-sans relative transition-all duration-300 pb-20" style={bgStyle}>
-      {/* LỚP PHỦ NỀN TRONG SUỐT ĐỂ GIỮ CHỮ VÀ BẢNG MỜ RÕ NÉT */}
       <div className="fixed inset-0 bg-white/60 backdrop-blur-[3px] pointer-events-none z-0"></div>
 
       {/* TOAST MESSAGE */}
@@ -700,15 +693,17 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="pt-1">
-                <button
-                  type="button"
-                  onClick={() => setShowAutoFillModal(true)}
-                  className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-yellow-200 to-pink-200 hover:from-yellow-300 hover:to-pink-300 text-slate-800 text-xs font-bold flex items-center justify-center gap-2 transition shadow-sm"
-                >
-                  <Bookmark className="w-4 h-4 text-pink-600" /> Tự Động Điền / Chọn Tài Khoản Đã Lưu ✨
-                </button>
-              </div>
+              {savedAccounts.length > 0 && (
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowAutoFillModal(true)}
+                    className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-yellow-200 to-pink-200 hover:from-yellow-300 hover:to-pink-300 text-slate-800 text-xs font-bold flex items-center justify-center gap-2 transition shadow-sm"
+                  >
+                    <Bookmark className="w-4 h-4 text-pink-600" /> Tự Động Điền Tài Khoản Đã Lưu ✨
+                  </button>
+                </div>
+              )}
 
               <div className="pt-2">
                 <button 
@@ -728,17 +723,16 @@ export default function App() {
             </form>
 
             <div className="mt-5 pt-3 border-t border-slate-100 text-center text-[11px] text-slate-400">
-              🌸 Toàn bộ dữ liệu được bảo mật & đồng bộ trên Cloud Firebase
+              🌸 Tất cả tài khoản & dữ liệu đều được bảo mật trên Firebase Cloud
             </div>
           </div>
         ) : (
           /* MÀN HÌNH QUẢN LÝ CHÍNH KHI ĐÃ ĐĂNG NHẬP */
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             
-            {/* THÔNG TIN CÁ NHÂN & DASHBOARD TỔNG HỢP (CỘT TRÁI) */}
+            {/* CỘT TRÁI: THÔNG TIN CÁ NHÂN & DASHBOARD */}
             <div className="lg:col-span-1 space-y-6">
               
-              {/* CARD CÁ NHÂN HÓA */}
               <div className="bg-white/90 backdrop-blur-md rounded-3xl p-5 border border-pink-100 shadow-xl relative overflow-hidden">
                 <div className="text-center relative">
                   
@@ -782,7 +776,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* DASHBOARD TỔNG HỢP 4 NĂM HỌC */}
               <div className="bg-white/90 backdrop-blur-md rounded-3xl p-5 border border-pink-100 shadow-xl">
                 <h3 className="font-bold text-slate-800 text-xs md:text-sm flex items-center gap-2 mb-3">
                   <Award className="w-4 h-4 text-pink-500" /> DASHBOARD TỔNG HỢP 4 NĂM
@@ -820,10 +813,9 @@ export default function App() {
 
             </div>
 
-            {/* BẢNG TÍNH ĐIỂM RÈN LUYỆN THEO HỌC KỲ (CỘT PHẢI) */}
+            {/* CỘT PHẢI: BẢNG TÍNH ĐIỂM CHI TIẾT */}
             <div className="lg:col-span-3 space-y-6">
               
-              {/* THANH CHỌN NĂM HỌC VÀ HỌC KỲ */}
               <div className="bg-white/90 backdrop-blur-md rounded-3xl p-4 border border-pink-100 shadow-xl flex flex-wrap items-center justify-between gap-4">
                 <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
                   <Calendar className="w-5 h-5 text-pink-500 shrink-0" />
@@ -860,13 +852,12 @@ export default function App() {
                 </div>
               </div>
 
-              {/* CARD TỔNG ĐIỂM HỌC KỲ ĐANG CHỌN */}
               <div className="bg-white/90 backdrop-blur-md rounded-3xl p-5 border border-pink-100 shadow-xl flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
                     Bảng Điểm Rèn Luyện: Năm {selectedYear} - Học Kỳ {selectedSemester}
                   </h2>
-                  <p className="text-xs text-slate-500 mt-0.5">Tự động cộng tối đa theo từng điều quy định OU</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Tự động cộng tối đa theo quy định OU</p>
                 </div>
 
                 <div className="flex items-center gap-4">
@@ -886,7 +877,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* BẢNG CHI TIẾT 5 ĐIỀU RÈN LUYỆN */}
               <div className="space-y-4">
                 {OU_CRITERIA_GROUPS.map(group => {
                   const groupScore = currentGroupTotals[group.id] || 0;
@@ -904,7 +894,6 @@ export default function App() {
                         </div>
                       </div>
 
-                      {/* TIÊU CHÍ MẶC ĐỊNH */}
                       <div className="space-y-3">
                         {groupItems.map(item => {
                           const currentScore = semestersData[currentSemKey]?.scores?.[item.id] ?? (item.defaultChecked ? item.defaultScore : 0);
@@ -947,7 +936,6 @@ export default function App() {
                           );
                         })}
 
-                        {/* NHIỆM VỤ TỰ THÊM (CUSTOM TASKS) */}
                         {customItems.map(task => (
                           <div key={task.id} className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-amber-50/50 border border-amber-200/60 text-xs">
                             <div className="space-y-1">
@@ -957,7 +945,6 @@ export default function App() {
                               </div>
                               {task.note && <p className="text-[11px] text-slate-500">{task.note}</p>}
                               
-                              {/* FILE MINH CHỨNG ĐÍNH KÈM */}
                               {task.evidenceData && (
                                 <div className="mt-1 flex items-center gap-2">
                                   <Paperclip className="w-3.5 h-3.5 text-pink-500" />
@@ -996,7 +983,7 @@ export default function App() {
         )}
       </main>
 
-      {/* MODAL THÊM NHIỆM VỤ & MINH CHỨNG */}
+      {/* MODAL THÊM NHIỆM VỤ */}
       {showAddTaskModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 border border-pink-100 shadow-2xl space-y-4">
