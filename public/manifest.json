@@ -3,15 +3,15 @@
   "name": "ĐIỂM RÈN LUYỆN OU",
   "icons": [
     {
-      "src": "https://ih1.redbubble.net/image.5980629534.0730/fposter,small,wall_texture,square_product,600x600.jpg",
+      "src": "https://cdn-icons-png.flaticon.com/512/2396/2396924.png",
       "sizes": "192x192",
-      "type": "image/jpeg",
+      "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "https://ih1.redbubble.net/image.5980629534.0730/fposter,small,wall_texture,square_product,600x600.jpg",
+      "src": "https://cdn-icons-png.flaticon.com/512/2396/2396924.png",
       "sizes": "512x512",
-      "type": "image/jpeg",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ],
