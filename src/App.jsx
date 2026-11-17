@@ -32,7 +32,8 @@ import {
   Layers,
   ChevronRight,
   Download,
-  X
+  X,
+  AlertCircle
 } from 'lucide-react';
 
 // --- FIREBASE INITIALIZATION ---
@@ -50,7 +51,6 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// --- CÁC HẰNG SỐ CẤU HÌNH CỦA BẠN (KHÔI PHỤC LẠI) ---
 const DEFAULT_APP_BG = "https://i.postimg.cc/LX77FbGJ/698de94a-df05-422b-8346-8e6e6cbd8f08.webp"; 
 const YEARS = [1, 2, 3, 4];
 const SEMESTERS = [1, 2, 3];
@@ -87,6 +87,37 @@ const initializeDefaultSemesters = () => {
     });
   });
   return data;
+};
+
+// --- HÀM NÉN ẢNH ĐỂ KHÔNG BỊ VƯỢT GIỚI HẠN FIREBASE ---
+const compressImage = (file) => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const MAX_SIZE = 800; // Chiều rộng/ cao tối đa 800px
+
+        if (width > height) {
+          if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
+        } else {
+          if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        // Nén xuống định dạng JPEG chất lượng 60% để giảm dung lượng tối đa
+        resolve(canvas.toDataURL('image/jpeg', 0.6));
+      };
+    };
+  });
 };
 
 export default function App() {
@@ -127,6 +158,9 @@ export default function App() {
   const [newTask, setNewTask] = useState({
     title: '', groupId: 'g1', score: 5, date: new Date().toISOString().split('T')[0], note: '', evidences: []
   });
+
+  // State để xem ảnh Full màn hình (Tránh văng app)
+  const [viewingImage, setViewingImage] = useState(null);
 
   useEffect(() => {
     const handleBeforeInstall = (e) => { e.preventDefault(); setDeferredPrompt(e); setShowInstallBtn(true); };
@@ -176,6 +210,7 @@ export default function App() {
         setLastSaved(new Date().toLocaleTimeString());
       } catch (err) {
         console.error("Auto-save error:", err);
+        showToast('❌ Lỗi tự động lưu! Có thể do dữ liệu quá lớn.', 'error');
       } finally {
         setIsAutoSaving(false);
       }
@@ -251,26 +286,39 @@ export default function App() {
     });
   };
 
-  // --- UPLOAD NHIỀU ẢNH ---
-  const handleEvidenceFileUpload = (e) => {
+  // --- UPLOAD NHIỀU ẢNH & TỰ ĐỘNG NÉN ---
+  const handleEvidenceFileUpload = async (e) => {
     const files = Array.from(e.target.files);
     if (!files.length) return;
     if (newTask.evidences.length + files.length > 10) return showToast('Tối đa 10 ảnh/file!', 'error');
 
     let valid = 0;
-    files.forEach(file => {
-      if (file.size > 1 * 1024 * 1024) return showToast(`File ${file.name} > 1MB!`, 'error');
-      valid++;
-      const reader = new FileReader();
-      reader.onloadend = () => {
+    for (const file of files) {
+      if (file.type === 'application/pdf') {
+        if (file.size > 1 * 1024 * 1024) {
+          showToast(`File PDF ${file.name} > 1MB! Vui lòng chọn file nhỏ hơn.`, 'error');
+          continue;
+        }
+        valid++;
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setNewTask(prev => ({
+            ...prev,
+            evidences: [...prev.evidences, { id: 'ev_' + Date.now() + Math.random(), name: file.name, data: reader.result, type: 'pdf' }]
+          }));
+        };
+        reader.readAsDataURL(file);
+      } else {
+        // Nếu là ảnh, tiến hành nén
+        valid++;
+        const compressedBase64 = await compressImage(file);
         setNewTask(prev => ({
           ...prev,
-          evidences: [...prev.evidences, { id: 'ev_' + Date.now() + Math.random(), name: file.name, data: reader.result, type: file.type === 'application/pdf' ? 'pdf' : 'image' }]
+          evidences: [...prev.evidences, { id: 'ev_' + Date.now() + Math.random(), name: file.name, data: compressedBase64, type: 'image' }]
         }));
-      };
-      reader.readAsDataURL(file);
-    });
-    if (valid > 0) showToast(`📄 Đã thêm ${valid} file!`);
+      }
+    }
+    if (valid > 0) showToast(`📄 Đã xử lý ${valid} file!`);
     e.target.value = null;
   };
 
@@ -297,6 +345,17 @@ export default function App() {
       return { ...prev, [currentSemKey]: { ...sem, customTasks: (sem.customTasks || []).filter(t => t.id !== taskId) } };
     });
     showToast('🗑️ Đã xóa!');
+  };
+
+  // Hàm Tick/Bỏ tick nhiệm vụ tự thêm
+  const toggleCustomTaskScore = (taskId, currentScore) => {
+    setSemestersData(prev => {
+      const sem = prev[currentSemKey] || { customTasks: [] };
+      const updatedTasks = (sem.customTasks || []).map(t => 
+        t.id === taskId ? { ...t, score: currentScore > 0 ? 0 : t.originalScore || t.score || 5 } : t
+      );
+      return { ...prev, [currentSemKey]: { ...sem, customTasks: updatedTasks } };
+    });
   };
 
   const handleAvatarUpload = (e) => {
@@ -351,6 +410,7 @@ export default function App() {
     <div className="min-h-screen text-slate-800 font-sans relative pb-20" style={{ backgroundImage: `url(${DEFAULT_APP_BG})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
       <div className="fixed inset-0 bg-white/60 backdrop-blur-[3px] pointer-events-none z-0"></div>
 
+      {/* TOAST */}
       {toastMessage && (
         <div className={`fixed top-5 right-5 z-50 px-5 py-3 rounded-2xl shadow-xl border flex items-center gap-3 animate-bounce ${toastMessage.type === 'error' ? 'bg-red-100 border-red-300 text-red-700' : 'bg-white/95 border-pink-300 text-pink-700'}`}>
           <Sparkles className="w-5 h-5 text-pink-400" />
@@ -358,6 +418,7 @@ export default function App() {
         </div>
       )}
 
+      {/* HEADER */}
       <header className="relative z-10 bg-white/85 backdrop-blur-md border-b border-pink-100 sticky top-0 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-3">
           <div className="flex items-center gap-3">
@@ -388,6 +449,7 @@ export default function App() {
         </div>
       </header>
 
+      {/* MAIN CONTENT */}
       <main className="relative z-10 max-w-7xl mx-auto px-4 mt-6">
         {!isLoggedIn ? (
           <div className="max-w-md mx-auto mt-6 bg-white/95 backdrop-blur-lg rounded-3xl p-6 md:p-8 border border-pink-100 shadow-2xl relative overflow-hidden">
@@ -494,10 +556,11 @@ export default function App() {
                       </div>
 
                       <div className="space-y-3">
+                        {/* Tiêu chí mặc định */}
                         {groupItems.map(item => {
                           const currentScore = semestersData[currentSemKey]?.scores?.[item.id] ?? (item.defaultChecked ? item.defaultScore : 0);
                           return (
-                            <div key={item.id} className="flex items-center justify-between gap-3 p-2.5 rounded-2xl hover:bg-pink-50/30 text-xs">
+                            <div key={item.id} className="flex items-center justify-between gap-3 p-2.5 rounded-2xl hover:bg-pink-50/30 text-xs border border-transparent hover:border-pink-100">
                               <div className="flex items-start gap-2.5 flex-1">
                                 <input type="checkbox" checked={currentScore > 0} onChange={(e) => handleDefaultScoreChange(item.id, e.target.checked ? item.defaultScore : 0)} className="mt-0.5 rounded text-pink-500 w-4 h-4" />
                                 <span className={currentScore > 0 ? 'text-slate-800' : 'text-slate-400'}>{item.title}</span>
@@ -513,30 +576,52 @@ export default function App() {
                           );
                         })}
 
+                        {/* Nhiệm vụ tự thêm */}
                         {customItems.map(task => {
                           const taskEvidences = task.evidences || (task.evidenceData ? [{ id: 'legacy', name: task.evidenceName, data: task.evidenceData, type: task.evidenceType }] : []);
+                          const isScored = task.score > 0;
+                          
                           return (
-                            <div key={task.id} className="flex flex-wrap items-start justify-between gap-3 p-3 rounded-2xl bg-amber-50/50 border border-amber-200/60 text-xs">
-                              <div className="space-y-1 flex-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-bold text-slate-800">{task.title}</span>
-                                  <span className="text-[10px] text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">{task.date}</span>
-                                </div>
-                                {task.note && <p className="text-[11px] text-slate-500">{task.note}</p>}
-                                {taskEvidences.length > 0 && (
-                                  <div className="mt-2 flex flex-wrap gap-2">
-                                    {taskEvidences.map((ev, idx) => (
-                                      <a key={ev.id || idx} href={ev.data} target="_blank" rel="noreferrer" className="flex items-center gap-1 bg-white border border-pink-200 px-2 py-1 rounded-lg text-[10px] text-pink-600 font-semibold hover:bg-pink-50 shadow-sm">
-                                        <Paperclip className="w-3 h-3" /> {ev.type === 'pdf' ? 'PDF' : 'Ảnh'} {idx + 1}
-                                      </a>
-                                    ))}
+                            <div key={task.id} className={`flex flex-col gap-2 p-3 rounded-2xl border ${isScored ? 'bg-amber-50/60 border-amber-200' : 'bg-slate-50/60 border-slate-200'} text-xs transition`}>
+                              
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="flex items-start gap-2.5 flex-1">
+                                  {/* Nút tick nhiệm vụ */}
+                                  <input 
+                                    type="checkbox" 
+                                    checked={isScored} 
+                                    onChange={() => toggleCustomTaskScore(task.id, task.score)} 
+                                    className="mt-0.5 rounded text-amber-500 w-4 h-4 cursor-pointer" 
+                                  />
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <span className={`font-bold ${isScored ? 'text-slate-800' : 'text-slate-400 line-through'}`}>{task.title}</span>
+                                      <span className="text-[10px] text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">{task.date}</span>
+                                    </div>
+                                    {task.note && <p className="text-[11px] text-slate-500 mt-0.5">{task.note}</p>}
                                   </div>
-                                )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className={`font-extrabold ${isScored ? 'text-amber-600' : 'text-slate-400'}`}>+{task.score}đ</span>
+                                  <button onClick={() => handleDeleteTask(task.id)} className="text-slate-400 hover:text-red-500 p-1"><Trash2 className="w-4 h-4" /></button>
+                                </div>
                               </div>
-                              <div className="flex items-center gap-3">
-                                <span className="font-extrabold text-amber-600">+{task.score}đ</span>
-                                <button onClick={() => handleDeleteTask(task.id)} className="text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
-                              </div>
+
+                              {/* Hiển thị danh sách ảnh của nhiệm vụ đó */}
+                              {taskEvidences.length > 0 && (
+                                <div className="pl-6 mt-1 flex flex-wrap gap-2">
+                                  {taskEvidences.map((ev, idx) => (
+                                    <button 
+                                      key={ev.id || idx} 
+                                      onClick={() => setViewingImage({ src: ev.data, name: ev.name })} 
+                                      className="flex items-center gap-1 bg-white border border-pink-200 px-2 py-1 rounded-lg text-[10px] text-pink-600 font-semibold hover:bg-pink-50 shadow-sm cursor-pointer"
+                                    >
+                                      <Paperclip className="w-3 h-3" /> {ev.type === 'pdf' ? 'PDF' : 'Ảnh'} {idx + 1}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+
                             </div>
                           );
                         })}
@@ -550,9 +635,10 @@ export default function App() {
         )}
       </main>
 
+      {/* MODAL THÊM NHIỆM VỤ */}
       {showAddTaskModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 border border-pink-100 shadow-2xl space-y-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 border border-pink-100 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b border-pink-100 pb-3">
               <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2"><PlusCircle className="w-4 h-4 text-pink-500" /> Thêm Nhiệm Vụ Mới</h3>
               <button onClick={() => setShowAddTaskModal(false)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
@@ -571,7 +657,7 @@ export default function App() {
               <input type="date" value={newTask.date} onChange={(e) => setNewTask(p => ({ ...p, date: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-pink-200 text-xs" />
 
               <div className="bg-pink-50/50 p-3 rounded-2xl border border-pink-100">
-                <label className="block text-xs font-semibold text-slate-600 mb-2">Minh Chứng (Max 10 file ≤ 1MB)</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-2">Minh Chứng (Max 10 file)</label>
                 <input type="file" multiple accept="image/*,application/pdf" onChange={handleEvidenceFileUpload} disabled={newTask.evidences.length >= 10} className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-pink-100 file:text-pink-700" />
                 
                 {newTask.evidences.length > 0 && (
@@ -596,6 +682,26 @@ export default function App() {
         </div>
       )}
 
+      {/* MODAL XEM ẢNH FULL MÀN HÌNH (TRÁNH VĂNG APP) */}
+      {viewingImage && (
+        <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex flex-col items-center justify-center p-4">
+          <div className="w-full max-w-4xl flex justify-between items-center text-white mb-4">
+            <span className="text-sm font-medium truncate">{viewingImage.name}</span>
+            <button onClick={() => setViewingImage(null)} className="bg-white/20 hover:bg-white/40 p-2 rounded-full transition">
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+          <div className="relative w-full flex-1 flex items-center justify-center overflow-hidden">
+             {viewingImage.src.startsWith('data:application/pdf') ? (
+                <iframe src={viewingImage.src} className="w-full h-full rounded-lg bg-white" title="PDF Viewer" />
+             ) : (
+                <img src={viewingImage.src} alt="Minh chứng" className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" />
+             )}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL TỰ ĐỘNG ĐIỀN */}
       {showAutoFillModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 shadow-2xl space-y-3">
