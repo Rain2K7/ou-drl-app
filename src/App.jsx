@@ -51,7 +51,7 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 
 // --- CÁC HẰNG SỐ CẤU HÌNH CỦA BẠN (KHÔI PHỤC LẠI) ---
-const DEFAULT_APP_BG = "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80"; 
+const DEFAULT_APP_BG = "blob:https://www.facebook.com/698de94a-df05-422b-8346-8e6e6cbd8f08"; 
 const YEARS = [1, 2, 3, 4];
 const SEMESTERS = [1, 2, 3];
 
