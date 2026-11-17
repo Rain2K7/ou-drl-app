@@ -16,7 +16,6 @@ import {
   Sparkles, 
   Award, 
   Save, 
-  Image as ImageIcon, 
   LogOut, 
   LogIn, 
   RefreshCw, 
@@ -51,8 +50,44 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// Giữ nguyên các biến DEFAULT_APP_BG, OU_CRITERIA_GROUPS, DEFAULT_CRITERIA_ITEMS, initializeDefaultSemesters ở đây...
-// (Mình lược bớt phần này trong khung code để bạn dễ nhìn)
+// --- CÁC HẰNG SỐ CẤU HÌNH CỦA BẠN (KHÔI PHỤC LẠI) ---
+const DEFAULT_APP_BG = "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80"; 
+const YEARS = [1, 2, 3, 4];
+const SEMESTERS = [1, 2, 3];
+
+const OU_CRITERIA_GROUPS = [
+  { id: 'g1', title: 'Điều 1. Ý thức học tập', maxPoints: 20 },
+  { id: 'g2', title: 'Điều 2. Ý thức chấp hành quy chế', maxPoints: 25 },
+  { id: 'g3', title: 'Điều 3. Hoạt động chính trị - xã hội', maxPoints: 20 },
+  { id: 'g4', title: 'Điều 4. Phẩm chất đạo đức', maxPoints: 15 },
+  { id: 'g5', title: 'Điều 5. Hoạt động tập thể', maxPoints: 20 },
+];
+
+const DEFAULT_CRITERIA_ITEMS = [
+  { id: 'c1', groupId: 'g1', title: 'Tinh thần thái độ học tập, dự giờ, thi cử đầy đủ', defaultChecked: true, defaultScore: 5, isScoreInput: false, maxScore: 5 },
+  { id: 'c2', groupId: 'g1', title: 'Tham gia CLB học thuật, NCKH, thi Olympic', defaultChecked: true, defaultScore: 5, isScoreInput: false, maxScore: 5 },
+  { id: 'c3', groupId: 'g1', title: 'Kết quả học tập ĐTB (≥3.6: 10đ | ≥3.2: 8đ | ≥2.5: 6đ)', defaultChecked: true, defaultScore: 10, isScoreInput: true, maxScore: 10 },
+  
+  { id: 'c4', groupId: 'g2', title: 'Không vi phạm quy chế thi, nội quy trường', defaultChecked: true, defaultScore: 15, isScoreInput: false, maxScore: 15 },
+  { id: 'c5', groupId: 'g2', title: 'Tham gia đầy đủ các buổi sinh hoạt lớp, khoa', defaultChecked: true, defaultScore: 10, isScoreInput: false, maxScore: 10 },
+  
+  { id: 'c6', groupId: 'g3', title: 'Tham gia các hoạt động tình nguyện, Mùa hè xanh', defaultChecked: true, defaultScore: 10, isScoreInput: false, maxScore: 10 },
+  { id: 'c7', groupId: 'g3', title: 'Tham gia hiến máu nhân đạo', defaultChecked: false, defaultScore: 10, isScoreInput: false, maxScore: 10 },
+  
+  { id: 'c8', groupId: 'g4', title: 'Lối sống lành mạnh, giúp đỡ bạn bè', defaultChecked: true, defaultScore: 10, isScoreInput: false, maxScore: 10 },
+  
+  { id: 'c9', groupId: 'g5', title: 'Tham gia các hoạt động văn hóa, văn nghệ, thể thao', defaultChecked: true, defaultScore: 10, isScoreInput: false, maxScore: 10 }
+];
+
+const initializeDefaultSemesters = () => {
+  const data = {};
+  YEARS.forEach(y => {
+    SEMESTERS.forEach(s => {
+      data[`Y${y}_S${s}`] = { scores: {}, customTasks: [] };
+    });
+  });
+  return data;
+};
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -74,16 +109,11 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
 
-  // --- TRẠNG THÁI TỰ ĐỘNG LƯU ---
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState(null);
 
   const [studentInfo, setStudentInfo] = useState({
-    name: 'Sinh Viên OU',
-    mssv: '',
-    class: '25DH1101',
-    major: 'Công Nghệ Thông Tin',
-    avatarUrl: ''
+    name: 'Sinh Viên OU', mssv: '', class: '25DH1101', major: 'Công Nghệ Thông Tin', avatarUrl: ''
   });
 
   const [selectedYear, setSelectedYear] = useState(1);
@@ -94,22 +124,12 @@ export default function App() {
 
   const [showAddTaskModal, setShowAddTaskModal] = useState(false);
   
-  // --- CẬP NHẬT LẠI STATE CỦA NHIỆM VỤ ĐỂ CHỨA MẢNG ẢNH (evidences) ---
   const [newTask, setNewTask] = useState({
-    title: '',
-    groupId: 'g1',
-    score: 5,
-    date: new Date().toISOString().split('T')[0],
-    note: '',
-    evidences: [] // Mảng chứa tối đa 10 ảnh/file
+    title: '', groupId: 'g1', score: 5, date: new Date().toISOString().split('T')[0], note: '', evidences: []
   });
 
   useEffect(() => {
-    const handleBeforeInstall = (e) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-      setShowInstallBtn(true);
-    };
+    const handleBeforeInstall = (e) => { e.preventDefault(); setDeferredPrompt(e); setShowInstallBtn(true); };
     window.addEventListener('beforeinstallprompt', handleBeforeInstall);
     return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
   }, []);
@@ -118,21 +138,15 @@ export default function App() {
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') {
-      setShowInstallBtn(false);
-    }
+    if (outcome === 'accepted') setShowInstallBtn(false);
     setDeferredPrompt(null);
   };
 
   useEffect(() => {
     try {
       const stored = localStorage.getItem('ou_saved_accounts_v3');
-      if (stored) {
-        setSavedAccounts(JSON.parse(stored));
-      }
-    } catch (e) {
-      console.error(e);
-    }
+      if (stored) setSavedAccounts(JSON.parse(stored));
+    } catch (e) { console.error(e); }
   }, []);
 
   useEffect(() => {
@@ -143,33 +157,22 @@ export default function App() {
         } else {
           await signInAnonymously(auth);
         }
-      } catch (err) {
-        console.error("Auth init error:", err);
-      }
+      } catch (err) { console.error("Auth init error:", err); }
     };
     initAuth();
-
-    const unsubscribe = onAuthStateChanged(auth, (usr) => {
-      setUser(usr);
-    });
+    const unsubscribe = onAuthStateChanged(auth, (usr) => setUser(usr));
     return () => unsubscribe();
   }, []);
 
-  // --- TỰ ĐỘNG LƯU FIRESTORE (DEBOUNCE 1.5s) ---
+  // --- TỰ ĐỘNG LƯU ---
   useEffect(() => {
     if (!isLoggedIn || !studentInfo.mssv) return;
-
     setIsAutoSaving(true);
-
     const timer = setTimeout(async () => {
       try {
-        const userDocRef = doc(db, 'ou_users', studentInfo.mssv);
-        await setDoc(userDocRef, {
-          studentInfo,
-          semestersData,
-          updatedAt: new Date().toISOString()
+        await setDoc(doc(db, 'ou_users', studentInfo.mssv), {
+          studentInfo, semestersData, updatedAt: new Date().toISOString()
         }, { merge: true });
-        
         setLastSaved(new Date().toLocaleTimeString());
       } catch (err) {
         console.error("Auto-save error:", err);
@@ -177,7 +180,6 @@ export default function App() {
         setIsAutoSaving(false);
       }
     }, 1500);
-
     return () => clearTimeout(timer);
   }, [studentInfo, semestersData, isLoggedIn]);
 
@@ -197,246 +199,111 @@ export default function App() {
 
   const handleRegister = async (e) => {
     e.preventDefault();
-    if (!authMssv || !authPassword || !authName) {
-      showToast('Vui lòng nhập đầy đủ thông tin!', 'error');
-      return;
-    }
-
-    if (authMssv.length < 8) {
-      showToast('MSSV phải từ 8 ký tự trở lên!', 'error');
-      return;
-    }
-
+    if (!authMssv || !authPassword || !authName) return showToast('Vui lòng nhập đầy đủ thông tin!', 'error');
+    if (authMssv.length < 8) return showToast('MSSV phải từ 8 ký tự!', 'error');
+    
     setLoading(true);
     try {
       const userDocRef = doc(db, 'ou_users', authMssv);
       const docSnap = await getDoc(userDocRef);
+      if (docSnap.exists()) return showToast('⚠️ MSSV này đã được đăng ký!', 'error');
 
-      if (docSnap.exists()) {
-        showToast('⚠️ MSSV này đã được đăng ký! Vui lòng chuyển sang Đăng Nhập.', 'error');
-        setLoading(false);
-        return;
-      }
-
-      const initialInfo = {
-        name: authName,
-        mssv: authMssv,
-        class: authClass,
-        major: authMajor,
-        avatarUrl: ''
-      };
-
+      const initialInfo = { name: authName, mssv: authMssv, class: authClass, major: authMajor, avatarUrl: '' };
       const defaultSemData = initializeDefaultSemesters();
 
-      await setDoc(userDocRef, {
-        mssv: authMssv,
-        password: authPassword,
-        studentInfo: initialInfo,
-        semestersData: defaultSemData,
-        createdAt: new Date().toISOString()
-      });
-
-      saveAccountToLocal({
-        mssv: authMssv,
-        name: authName,
-        class: authClass,
-        pass: authPassword
-      });
-
+      await setDoc(userDocRef, { mssv: authMssv, password: authPassword, studentInfo: initialInfo, semestersData: defaultSemData, createdAt: new Date().toISOString() });
+      saveAccountToLocal({ mssv: authMssv, name: authName, class: authClass, pass: authPassword });
       setStudentInfo(initialInfo);
       setSemestersData(defaultSemData);
       setIsLoggedIn(true);
-      showToast('🎉 Đăng ký tài khoản Cloud thành công!');
-    } catch (err) {
-      console.error("Register Error:", err);
-      showToast('❌ Lỗi kết nối Firestore khi đăng ký!', 'error');
-    } finally {
-      setLoading(false);
-    }
+      showToast('🎉 Đăng ký thành công!');
+    } catch (err) { showToast('❌ Lỗi kết nối!', 'error'); } finally { setLoading(false); }
   };
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    if (!authMssv || !authPassword) {
-      showToast('Vui lòng nhập MSSV và Mật khẩu!', 'error');
-      return;
-    }
-
+    if (!authMssv || !authPassword) return showToast('Vui lòng nhập MSSV và Mật khẩu!', 'error');
     setLoading(true);
     try {
-      const userDocRef = doc(db, 'ou_users', authMssv);
-      const docSnap = await getDoc(userDocRef);
-
-      if (!docSnap.exists()) {
-        showToast('❌ Tài khoản chưa đăng ký trên app! Vui lòng chuyển sang Đăng Ký Mới.', 'error');
-        setLoading(false);
-        return;
-      }
-
+      const docSnap = await getDoc(doc(db, 'ou_users', authMssv));
+      if (!docSnap.exists()) return showToast('❌ Tài khoản chưa đăng ký!', 'error');
+      
       const userData = docSnap.data();
-
-      if (userData.password !== authPassword) {
-        showToast('❌ Sai mật khẩu! Vui lòng kiểm tra lại.', 'error');
-        setLoading(false);
-        return;
-      }
+      if (userData.password !== authPassword) return showToast('❌ Sai mật khẩu!', 'error');
 
       if (userData.studentInfo) setStudentInfo(userData.studentInfo);
       if (userData.semestersData) setSemestersData(userData.semestersData);
-
-      saveAccountToLocal({
-        mssv: authMssv,
-        name: userData.studentInfo?.name || 'Sinh Viên OU',
-        class: userData.studentInfo?.class || '25DH1101',
-        pass: authPassword
-      });
-
+      saveAccountToLocal({ mssv: authMssv, name: userData.studentInfo?.name || 'Sinh Viên OU', class: userData.studentInfo?.class || '25DH1101', pass: authPassword });
       setIsLoggedIn(true);
-      showToast('💖 Đăng nhập thành công! Dữ liệu Cloud đã tải nguyên vẹn.');
-    } catch (err) {
-      console.error("Login Error:", err);
-      showToast('❌ Không thể kết nối với Firestore!', 'error');
-    } finally {
-      setLoading(false);
-    }
+      showToast('💖 Đăng nhập thành công!');
+    } catch (err) { showToast('❌ Không thể kết nối!', 'error'); } finally { setLoading(false); }
   };
 
   const handleSelectAutoFillAccount = (acc) => {
-    setAuthMssv(acc.mssv);
-    setAuthPassword(acc.pass || '');
-    if (acc.name) setAuthName(acc.name);
-    setShowAutoFillModal(false);
-    showToast(`✨ Đã tự động điền tài khoản ${acc.mssv}!`);
+    setAuthMssv(acc.mssv); setAuthPassword(acc.pass || ''); if (acc.name) setAuthName(acc.name);
+    setShowAutoFillModal(false); showToast(`✨ Đã điền tài khoản ${acc.mssv}!`);
   };
 
   const handleDefaultScoreChange = (itemId, val) => {
-    const numVal = Math.max(0, Number(val) || 0);
     setSemestersData(prev => {
       const sem = prev[currentSemKey] || {};
-      return {
-        ...prev,
-        [currentSemKey]: {
-          ...sem,
-          scores: {
-            ...(sem.scores || {}),
-            [itemId]: numVal
-          }
-        }
-      };
+      return { ...prev, [currentSemKey]: { ...sem, scores: { ...(sem.scores || {}), [itemId]: Math.max(0, Number(val) || 0) } } };
     });
   };
 
-  // --- XỬ LÝ UPLOAD NHIỀU ẢNH (TỐI ĐA 10 ẢNH) ---
+  // --- UPLOAD NHIỀU ẢNH ---
   const handleEvidenceFileUpload = (e) => {
     const files = Array.from(e.target.files);
     if (!files.length) return;
+    if (newTask.evidences.length + files.length > 10) return showToast('Tối đa 10 ảnh/file!', 'error');
 
-    // Kiểm tra giới hạn 10 file
-    if (newTask.evidences.length + files.length > 10) {
-      showToast('Chỉ được đính kèm tối đa 10 ảnh/file minh chứng cho 1 nhiệm vụ!', 'error');
-      e.target.value = null; // Reset input
-      return;
-    }
-
-    // Đọc từng file
-    let validFilesCount = 0;
+    let valid = 0;
     files.forEach(file => {
-      // Giảm xuống 1MB để tránh vượt quá giới hạn 1MB của Firestore (Base64 phình to)
-      if (file.size > 1 * 1024 * 1024) {
-        showToast(`File ${file.name} vượt quá 1MB! Vui lòng chọn file nhẹ hơn.`, 'error');
-        return;
-      }
-
-      validFilesCount++;
+      if (file.size > 1 * 1024 * 1024) return showToast(`File ${file.name} > 1MB!`, 'error');
+      valid++;
       const reader = new FileReader();
       reader.onloadend = () => {
-        const isPdf = file.type === 'application/pdf';
         setNewTask(prev => ({
           ...prev,
-          evidences: [...prev.evidences, {
-            id: 'ev_' + Date.now() + Math.random(),
-            name: file.name,
-            data: reader.result,
-            type: isPdf ? 'pdf' : 'image'
-          }]
+          evidences: [...prev.evidences, { id: 'ev_' + Date.now() + Math.random(), name: file.name, data: reader.result, type: file.type === 'application/pdf' ? 'pdf' : 'image' }]
         }));
       };
       reader.readAsDataURL(file);
     });
-    
-    if (validFilesCount > 0) {
-      showToast(`📄 Đã thêm ${validFilesCount} file đính kèm!`);
-    }
-    e.target.value = null; // Reset input để có thể chọn lại cùng file
+    if (valid > 0) showToast(`📄 Đã thêm ${valid} file!`);
+    e.target.value = null;
   };
 
-  // --- XÓA 1 ẢNH TRONG MODAL ---
   const handleRemoveEvidence = (evId) => {
-    setNewTask(prev => ({
-      ...prev,
-      evidences: prev.evidences.filter(ev => ev.id !== evId)
-    }));
+    setNewTask(prev => ({ ...prev, evidences: prev.evidences.filter(ev => ev.id !== evId) }));
   };
 
   const handleCreateTask = (e) => {
     e.preventDefault();
-    if (!newTask.title) {
-      showToast('Vui lòng nhập tên nhiệm vụ!', 'error');
-      return;
-    }
-
-    const taskItem = {
-      id: 'custom_' + Date.now(),
-      ...newTask,
-      score: Number(newTask.score) || 0
-    };
-
+    if (!newTask.title) return showToast('Vui lòng nhập tên nhiệm vụ!', 'error');
+    const taskItem = { id: 'custom_' + Date.now(), ...newTask, score: Number(newTask.score) || 0 };
     setSemestersData(prev => {
       const sem = prev[currentSemKey] || { scores: {}, customTasks: [] };
-      return {
-        ...prev,
-        [currentSemKey]: {
-          ...sem,
-          customTasks: [...(sem.customTasks || []), taskItem]
-        }
-      };
+      return { ...prev, [currentSemKey]: { ...sem, customTasks: [...(sem.customTasks || []), taskItem] } };
     });
-
     setShowAddTaskModal(false);
-    // Reset form
-    setNewTask({
-      title: '',
-      groupId: 'g1',
-      score: 5,
-      date: new Date().toISOString().split('T')[0],
-      note: '',
-      evidences: []
-    });
-    showToast('✨ Thêm nhiệm vụ & minh chứng thành công!');
+    setNewTask({ title: '', groupId: 'g1', score: 5, date: new Date().toISOString().split('T')[0], note: '', evidences: [] });
+    showToast('✨ Thêm nhiệm vụ thành công!');
   };
 
   const handleDeleteTask = (taskId) => {
     setSemestersData(prev => {
       const sem = prev[currentSemKey] || { customTasks: [] };
-      return {
-        ...prev,
-        [currentSemKey]: {
-          ...sem,
-          customTasks: (sem.customTasks || []).filter(t => t.id !== taskId)
-        }
-      };
+      return { ...prev, [currentSemKey]: { ...sem, customTasks: (sem.customTasks || []).filter(t => t.id !== taskId) } };
     });
-    showToast('🗑️ Đã xóa nhiệm vụ!');
+    showToast('🗑️ Đã xóa!');
   };
 
   const handleAvatarUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setStudentInfo(prev => ({ ...prev, avatarUrl: reader.result }));
-        showToast('✨ Đã cập nhật Avatar!');
-      };
+      reader.onloadend = () => { setStudentInfo(prev => ({ ...prev, avatarUrl: reader.result })); showToast('✨ Đã cập nhật Avatar!'); };
       reader.readAsDataURL(file);
     }
   };
@@ -444,40 +311,28 @@ export default function App() {
   const calculateGroupTotals = (semKey) => {
     const sem = semestersData[semKey] || { scores: {}, customTasks: [] };
     const totals = {};
-
     OU_CRITERIA_GROUPS.forEach(g => {
       let sum = 0;
-      DEFAULT_CRITERIA_ITEMS.filter(it => it.groupId === g.id).forEach(it => {
-        sum += (sem.scores?.[it.id] || 0);
-      });
-      (sem.customTasks || []).filter(t => t.groupId === g.id).forEach(t => {
-        sum += Number(t.score || 0);
-      });
+      DEFAULT_CRITERIA_ITEMS.filter(it => it.groupId === g.id).forEach(it => { sum += (sem.scores?.[it.id] || 0); });
+      (sem.customTasks || []).filter(t => t.groupId === g.id).forEach(t => { sum += Number(t.score || 0); });
       totals[g.id] = sum;
     });
-
     return totals;
   };
 
   const calculateSemesterTotal = (semKey) => {
     const groupTotals = calculateGroupTotals(semKey);
     let total = 0;
-    OU_CRITERIA_GROUPS.forEach(g => {
-      total += Math.min(groupTotals[g.id] || 0, g.maxPoints);
-    });
+    OU_CRITERIA_GROUPS.forEach(g => { total += Math.min(groupTotals[g.id] || 0, g.maxPoints); });
     return Math.min(100, Math.max(0, total));
   };
 
   const calculateYearAverage = (yearNum) => {
-    const s1 = calculateSemesterTotal(`Y${yearNum}_S1`);
-    const s2 = calculateSemesterTotal(`Y${yearNum}_S2`);
-    const s3 = calculateSemesterTotal(`Y${yearNum}_S3`);
-    return Math.round(((s1 + s2 + s3) / 3) * 10) / 10;
+    return Math.round(((calculateSemesterTotal(`Y${yearNum}_S1`) + calculateSemesterTotal(`Y${yearNum}_S2`) + calculateSemesterTotal(`Y${yearNum}_S3`)) / 3) * 10) / 10;
   };
 
   const calculateOverallAverage = () => {
-    let sum = 0;
-    YEARS.forEach(y => { sum += calculateYearAverage(y); });
+    let sum = 0; YEARS.forEach(y => { sum += calculateYearAverage(y); });
     return Math.round((sum / 4) * 10) / 10;
   };
 
@@ -492,69 +347,39 @@ export default function App() {
   const currentGroupTotals = calculateGroupTotals(currentSemKey);
   const currentSemesterScore = calculateSemesterTotal(currentSemKey);
 
-  const bgStyle = {
-    backgroundImage: `url(${DEFAULT_APP_BG})`,
-    backgroundSize: 'cover',
-    backgroundPosition: 'center',
-    backgroundAttachment: 'fixed'
-  };
-
   return (
-    <div className="min-h-screen text-slate-800 font-sans relative transition-all duration-300 pb-20" style={bgStyle}>
+    <div className="min-h-screen text-slate-800 font-sans relative pb-20" style={{ backgroundImage: `url(${DEFAULT_APP_BG})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
       <div className="fixed inset-0 bg-white/60 backdrop-blur-[3px] pointer-events-none z-0"></div>
 
-      {/* TOAST MESSAGE */}
       {toastMessage && (
-        <div className={`fixed top-5 right-5 z-50 px-5 py-3 rounded-2xl shadow-xl border flex items-center gap-3 animate-bounce ${
-          toastMessage.type === 'error' ? 'bg-red-100 border-red-300 text-red-700' : 'bg-white/95 border-pink-300 text-pink-700'
-        }`}>
+        <div className={`fixed top-5 right-5 z-50 px-5 py-3 rounded-2xl shadow-xl border flex items-center gap-3 animate-bounce ${toastMessage.type === 'error' ? 'bg-red-100 border-red-300 text-red-700' : 'bg-white/95 border-pink-300 text-pink-700'}`}>
           <Sparkles className="w-5 h-5 text-pink-400" />
           <span className="font-medium text-xs md:text-sm">{toastMessage.msg}</span>
         </div>
       )}
 
-      {/* HEADER */}
       <header className="relative z-10 bg-white/85 backdrop-blur-md border-b border-pink-100 sticky top-0 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-pink-400 to-yellow-300 flex items-center justify-center text-white shadow-md font-bold text-lg">
-              OU
-            </div>
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-pink-400 to-yellow-300 flex items-center justify-center text-white shadow-md font-bold text-lg">OU</div>
             <div>
-              <h1 className="font-bold text-pink-600 text-base md:text-lg flex items-center gap-1.5">
-                ĐIỂM RÈN LUYỆN OU <Sparkles className="w-4 h-4 text-yellow-400 fill-yellow-400" />
-              </h1>
+              <h1 className="font-bold text-pink-600 text-base md:text-lg flex items-center gap-1.5">ĐIỂM RÈN LUYỆN OU <Sparkles className="w-4 h-4 text-yellow-400 fill-yellow-400" /></h1>
               <p className="text-xs text-slate-500">Trường Đại Học Mở TP.HCM • Hệ Thống Cloud</p>
             </div>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
             {showInstallBtn && (
-              <button
-                onClick={handleInstallApp}
-                className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-pink-500 to-pink-600 hover:opacity-95 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-pink-200 transition active:scale-95 animate-pulse"
-              >
+              <button onClick={handleInstallApp} className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-pink-500 to-pink-600 hover:opacity-95 text-white font-bold text-xs flex items-center gap-1.5 shadow-md animate-pulse">
                 <Download className="w-4 h-4" /> Tải App
               </button>
             )}
-
             {isLoggedIn && (
               <>
-                {/* TRẠNG THÁI TỰ ĐỘNG LƯU */}
                 <div className="px-3.5 py-2 rounded-xl bg-white/70 border border-pink-200 text-xs font-semibold text-slate-600 flex items-center gap-1.5 shadow-sm min-w-[140px] justify-center">
-                  {isAutoSaving ? (
-                    <><RefreshCw className="w-3.5 h-3.5 animate-spin text-pink-500" /> Đang lưu...</>
-                  ) : lastSaved ? (
-                    <><Save className="w-3.5 h-3.5 text-green-500" /> Đã lưu lúc {lastSaved}</>
-                  ) : (
-                    <><Save className="w-3.5 h-3.5 text-slate-400" /> Sẵn sàng</>
-                  )}
+                  {isAutoSaving ? <><RefreshCw className="w-3.5 h-3.5 animate-spin text-pink-500" /> Đang lưu...</> : lastSaved ? <><Save className="w-3.5 h-3.5 text-green-500" /> Đã lưu lúc {lastSaved}</> : <><Save className="w-3.5 h-3.5 text-slate-400" /> Sẵn sàng</>}
                 </div>
-
-                <button 
-                  onClick={() => setIsLoggedIn(false)}
-                  className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-medium flex items-center gap-1 transition"
-                >
+                <button onClick={() => setIsLoggedIn(false)} className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-medium flex items-center gap-1">
                   <LogOut className="w-4 h-4" /> Đăng xuất
                 </button>
               </>
@@ -563,62 +388,95 @@ export default function App() {
         </div>
       </header>
 
-      {/* MAIN CONTENT AREA */}
       <main className="relative z-10 max-w-7xl mx-auto px-4 mt-6">
         {!isLoggedIn ? (
           <div className="max-w-md mx-auto mt-6 bg-white/95 backdrop-blur-lg rounded-3xl p-6 md:p-8 border border-pink-100 shadow-2xl relative overflow-hidden">
-            {/* ... (Phần form đăng nhập/đăng ký giữ nguyên) ... */}
             <div className="text-center mb-6 relative">
               <div className="w-20 h-20 mx-auto bg-gradient-to-tr from-pink-300 via-pink-400 to-yellow-300 rounded-full flex items-center justify-center p-1 shadow-md mb-3">
-                <div className="w-full h-full bg-white rounded-full flex items-center justify-center">
-                  <Heart className="w-9 h-9 text-pink-500 fill-pink-100" />
-                </div>
+                <div className="w-full h-full bg-white rounded-full flex items-center justify-center"><Heart className="w-9 h-9 text-pink-500 fill-pink-100" /></div>
               </div>
-              <h2 className="text-xl font-bold text-slate-800">
-                {authMode === 'login' ? 'Đăng Nhập Sinh Viên OU' : 'Đăng Ký Tài Khoản Cloud Mới'}
-              </h2>
+              <h2 className="text-xl font-bold text-slate-800">{authMode === 'login' ? 'Đăng Nhập Sinh Viên OU' : 'Đăng Ký Tài Khoản Cloud'}</h2>
             </div>
             
-            {/* Form đăng nhập ở đây, mình rút gọn để bạn dễ nhìn phần chính */}
+            <div className="flex bg-pink-50/80 p-1 rounded-2xl mb-5 border border-pink-100">
+              <button onClick={() => setAuthMode('login')} className={`flex-1 py-2 text-xs font-bold rounded-xl transition ${authMode === 'login' ? 'bg-white text-pink-600 shadow-sm' : 'text-slate-500'}`}>Đăng Nhập</button>
+              <button onClick={() => setAuthMode('register')} className={`flex-1 py-2 text-xs font-bold rounded-xl transition ${authMode === 'register' ? 'bg-white text-pink-600 shadow-sm' : 'text-slate-500'}`}>Đăng Ký Mới</button>
+            </div>
+
             <form onSubmit={authMode === 'login' ? handleLogin : handleRegister} className="space-y-3.5 relative">
-              {/* Nội dung form giữ nguyên như file cũ của bạn */}
-              <div className="pt-2">
-                <button 
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-3 rounded-2xl bg-pink-500 hover:bg-pink-600 text-white font-bold text-xs md:text-sm shadow-lg shadow-pink-200 transition active:scale-95 flex items-center justify-center gap-2"
-                >
-                  {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : authMode === 'login' ? 'Đăng Nhập' : 'Đăng Ký'}
+              {authMode === 'register' && (
+                <>
+                  <input type="text" value={authName} onChange={(e) => setAuthName(e.target.value)} placeholder="Họ và Tên" className="w-full px-3.5 py-2.5 rounded-xl border border-pink-200 text-xs" required />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="text" value={authClass} onChange={(e) => setAuthClass(e.target.value)} placeholder="Mã Lớp" className="w-full px-3 py-2 rounded-xl border border-pink-200 text-xs" />
+                    <input type="text" value={authMajor} onChange={(e) => setAuthMajor(e.target.value)} placeholder="Ngành Học" className="w-full px-3 py-2 rounded-xl border border-pink-200 text-xs" />
+                  </div>
+                </>
+              )}
+              <input type="text" value={authMssv} onChange={(e) => setAuthMssv(e.target.value)} placeholder="Mã Số Sinh Viên" className="w-full px-3.5 py-2.5 rounded-xl border border-pink-200 text-xs font-bold" required />
+              <div className="relative">
+                <input type={showPassword ? "text" : "password"} value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="Mật khẩu" className="w-full px-3.5 py-2.5 pr-10 rounded-xl border border-pink-200 text-xs" required />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-2.5 text-slate-400">
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+              
+              {savedAccounts.length > 0 && (
+                <button type="button" onClick={() => setShowAutoFillModal(true)} className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-yellow-200 to-pink-200 text-slate-800 text-xs font-bold flex items-center justify-center gap-2">
+                  <Bookmark className="w-4 h-4 text-pink-600" /> Tự Động Điền Tài Khoản
+                </button>
+              )}
+
+              <button type="submit" disabled={loading} className="w-full py-3 rounded-2xl bg-pink-500 text-white font-bold text-sm shadow-lg flex items-center justify-center gap-2">
+                {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : authMode === 'login' ? 'Đăng Nhập' : 'Tạo Tài Khoản'}
+              </button>
             </form>
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            {/* CỘT TRÁI: THÔNG TIN CÁ NHÂN & DASHBOARD */}
             <div className="lg:col-span-1 space-y-6">
-              {/* ... (Giữ nguyên phần Avatar và Dashboard) ... */}
+              <div className="bg-white/90 backdrop-blur-md rounded-3xl p-5 border border-pink-100 shadow-xl text-center">
+                <div className="relative w-24 h-24 mx-auto mb-3 group cursor-pointer">
+                  <img src={studentInfo.avatarUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb"} alt="Avatar" className="w-full h-full object-cover rounded-full border-4 border-pink-200" />
+                  <label className="absolute inset-0 bg-black/40 rounded-full flex flex-col items-center justify-center text-white text-[11px] opacity-0 group-hover:opacity-100 cursor-pointer">
+                    <Palette className="w-5 h-5 mb-1" /> Đổi
+                    <input type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
+                  </label>
+                </div>
+                <h3 className="font-bold text-slate-800 text-base">{studentInfo.name}</h3>
+                <p className="text-xs text-pink-600 font-extrabold mt-0.5">MSSV: {studentInfo.mssv}</p>
+                <div className="mt-3 text-xs text-slate-500 bg-pink-50/50 p-2.5 rounded-2xl">
+                  <p>Lớp: {studentInfo.class}</p>
+                  <p>Ngành: {studentInfo.major}</p>
+                </div>
+              </div>
+
+              <div className="bg-white/90 backdrop-blur-md rounded-3xl p-5 border border-pink-100 shadow-xl">
+                <h3 className="font-bold text-slate-800 text-xs flex items-center gap-2 mb-3"><Award className="w-4 h-4 text-pink-500" /> DASHBOARD</h3>
+                <div className="p-4 rounded-2xl bg-gradient-to-r from-pink-400 to-yellow-300 text-white text-center mb-4">
+                  <p className="text-[11px]">Điểm Trung Bình</p>
+                  <div className="text-3xl font-black">{calculateOverallAverage()} <span className="text-sm font-normal">/ 100</span></div>
+                </div>
+              </div>
             </div>
 
-            {/* CỘT PHẢI: BẢNG TÍNH ĐIỂM CHI TIẾT */}
             <div className="lg:col-span-3 space-y-6">
-              <div className="bg-white/90 backdrop-blur-md rounded-3xl p-5 border border-pink-100 shadow-xl flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
-                    Bảng Điểm Rèn Luyện: Năm {selectedYear} - Học Kỳ {selectedSemester}
-                  </h2>
+              <div className="bg-white/90 backdrop-blur-md rounded-3xl p-4 border border-pink-100 shadow-xl flex flex-wrap items-center justify-between gap-4">
+                <div className="flex bg-pink-50 p-1 rounded-2xl border border-pink-100">
+                  {YEARS.map(y => <button key={y} onClick={() => setSelectedYear(y)} className={`px-3 py-1.5 text-xs font-bold rounded-xl ${selectedYear === y ? 'bg-pink-500 text-white' : 'text-slate-600'}`}>Năm {y}</button>)}
                 </div>
+                <div className="flex bg-yellow-50 p-1 rounded-2xl border border-yellow-100">
+                  {SEMESTERS.map(s => <button key={s} onClick={() => setSelectedSemester(s)} className={`px-3 py-1.5 text-xs font-bold rounded-xl ${selectedSemester === s ? 'bg-amber-400 text-slate-900' : 'text-slate-600'}`}>HK {s}</button>)}
+                </div>
+              </div>
+
+              <div className="bg-white/90 backdrop-blur-md rounded-3xl p-5 border border-pink-100 shadow-xl flex flex-wrap justify-between items-center gap-4">
+                <h2 className="text-base font-bold text-slate-800">Bảng Điểm: Năm {selectedYear} - HK {selectedSemester}</h2>
                 <div className="flex items-center gap-4">
                   <div className="text-right">
-                    <span className="text-2xl font-black text-pink-600">{currentSemesterScore}</span>
-                    <span className="text-xs font-semibold text-slate-400"> / 100 đ</span>
+                    <span className="text-2xl font-black text-pink-600">{currentSemesterScore}</span><span className="text-xs font-semibold text-slate-400"> / 100 đ</span>
                   </div>
-                  <button
-                    onClick={() => setShowAddTaskModal(true)}
-                    className="px-4 py-2.5 rounded-2xl bg-pink-500 hover:bg-pink-600 text-white text-xs font-bold flex items-center gap-2 shadow-md shadow-pink-200 transition active:scale-95"
-                  >
-                    <PlusCircle className="w-4 h-4" /> Thêm Nhiệm Vụ
-                  </button>
+                  <button onClick={() => setShowAddTaskModal(true)} className="px-4 py-2.5 rounded-2xl bg-pink-500 text-white text-xs font-bold flex items-center gap-2"><PlusCircle className="w-4 h-4" /> Thêm Nhiệm Vụ</button>
                 </div>
               </div>
 
@@ -631,39 +489,32 @@ export default function App() {
                   return (
                     <div key={group.id} className="bg-white/90 backdrop-blur-md rounded-3xl p-5 border border-pink-100 shadow-lg">
                       <div className="flex justify-between items-center border-b border-pink-100 pb-3 mb-3">
-                        <h3 className="font-bold text-slate-800 text-xs md:text-sm text-pink-600">
-                          {group.title}
-                        </h3>
-                        <div className="text-xs font-extrabold text-slate-700 bg-pink-50 px-3 py-1 rounded-full border border-pink-200">
-                          {Math.min(groupScore, group.maxPoints)} / {group.maxPoints} đ
-                        </div>
+                        <h3 className="font-bold text-slate-800 text-xs md:text-sm text-pink-600">{group.title}</h3>
+                        <div className="text-xs font-extrabold text-slate-700 bg-pink-50 px-3 py-1 rounded-full">{Math.min(groupScore, group.maxPoints)} / {group.maxPoints} đ</div>
                       </div>
 
                       <div className="space-y-3">
-                        {/* Các item mặc định giữ nguyên... */}
                         {groupItems.map(item => {
                           const currentScore = semestersData[currentSemKey]?.scores?.[item.id] ?? (item.defaultChecked ? item.defaultScore : 0);
-                          const isChecked = currentScore > 0;
                           return (
-                            <div key={item.id} className="flex items-center justify-between gap-3 p-2.5 rounded-2xl hover:bg-pink-50/30 transition text-xs">
+                            <div key={item.id} className="flex items-center justify-between gap-3 p-2.5 rounded-2xl hover:bg-pink-50/30 text-xs">
                               <div className="flex items-start gap-2.5 flex-1">
-                                <input
-                                  type="checkbox"
-                                  checked={isChecked}
-                                  onChange={(e) => handleDefaultScoreChange(item.id, e.target.checked ? item.defaultScore : 0)}
-                                  className="mt-0.5 rounded border-pink-300 text-pink-500 w-4 h-4 cursor-pointer"
-                                />
-                                <span className={isChecked ? 'text-slate-800' : 'text-slate-400'}>{item.title}</span>
+                                <input type="checkbox" checked={currentScore > 0} onChange={(e) => handleDefaultScoreChange(item.id, e.target.checked ? item.defaultScore : 0)} className="mt-0.5 rounded text-pink-500 w-4 h-4" />
+                                <span className={currentScore > 0 ? 'text-slate-800' : 'text-slate-400'}>{item.title}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {item.isScoreInput ? (
+                                  <input type="number" value={currentScore} onChange={(e) => handleDefaultScoreChange(item.id, e.target.value)} className="w-14 px-2 py-1 border border-pink-200 rounded-xl text-center font-bold text-pink-600" />
+                                ) : (
+                                  <span className="font-bold text-slate-600">+{item.defaultScore}đ</span>
+                                )}
                               </div>
                             </div>
                           );
                         })}
 
-                        {/* HIỂN THỊ NHIỆM VỤ VÀ CÁC ẢNH MINH CHỨNG ĐÃ LƯU */}
                         {customItems.map(task => {
-                          // Tương thích ngược: Nếu có mảng evidences thì dùng, nếu có data cũ thì bọc lại thành mảng 1
                           const taskEvidences = task.evidences || (task.evidenceData ? [{ id: 'legacy', name: task.evidenceName, data: task.evidenceData, type: task.evidenceType }] : []);
-                          
                           return (
                             <div key={task.id} className="flex flex-wrap items-start justify-between gap-3 p-3 rounded-2xl bg-amber-50/50 border border-amber-200/60 text-xs">
                               <div className="space-y-1 flex-1">
@@ -672,31 +523,19 @@ export default function App() {
                                   <span className="text-[10px] text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">{task.date}</span>
                                 </div>
                                 {task.note && <p className="text-[11px] text-slate-500">{task.note}</p>}
-                                
-                                {/* HIỂN THỊ DANH SÁCH ẢNH MINH CHỨNG */}
                                 {taskEvidences.length > 0 && (
                                   <div className="mt-2 flex flex-wrap gap-2">
                                     {taskEvidences.map((ev, idx) => (
-                                      <a 
-                                        key={ev.id || idx}
-                                        href={ev.data} 
-                                        target="_blank" 
-                                        rel="noreferrer"
-                                        className="flex items-center gap-1 bg-white border border-pink-200 px-2 py-1 rounded-lg hover:bg-pink-50 text-[10px] text-pink-600 font-semibold shadow-sm"
-                                      >
-                                        <Paperclip className="w-3 h-3" /> 
-                                        {ev.type === 'pdf' ? 'PDF' : 'Ảnh'} {idx + 1}
+                                      <a key={ev.id || idx} href={ev.data} target="_blank" rel="noreferrer" className="flex items-center gap-1 bg-white border border-pink-200 px-2 py-1 rounded-lg text-[10px] text-pink-600 font-semibold hover:bg-pink-50 shadow-sm">
+                                        <Paperclip className="w-3 h-3" /> {ev.type === 'pdf' ? 'PDF' : 'Ảnh'} {idx + 1}
                                       </a>
                                     ))}
                                   </div>
                                 )}
                               </div>
-
                               <div className="flex items-center gap-3">
                                 <span className="font-extrabold text-amber-600">+{task.score}đ</span>
-                                <button onClick={() => handleDeleteTask(task.id)} className="text-slate-400 hover:text-red-500 p-1">
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
+                                <button onClick={() => handleDeleteTask(task.id)} className="text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
                               </div>
                             </div>
                           );
@@ -711,133 +550,70 @@ export default function App() {
         )}
       </main>
 
-      {/* MODAL THÊM NHIỆM VỤ */}
       {showAddTaskModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 border border-pink-100 shadow-2xl space-y-4">
             <div className="flex justify-between items-center border-b border-pink-100 pb-3">
-              <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                <PlusCircle className="w-4 h-4 text-pink-500" /> Thêm Hoạt Động & Minh Chứng Mới
-              </h3>
+              <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2"><PlusCircle className="w-4 h-4 text-pink-500" /> Thêm Nhiệm Vụ Mới</h3>
               <button onClick={() => setShowAddTaskModal(false)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
             </div>
 
             <form onSubmit={handleCreateTask} className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Tên hoạt động / Nhiệm vụ</label>
-                <input
-                  type="text"
-                  placeholder="VD: Tham gia dọn dẹp vệ sinh khuôn viên OU"
-                  value={newTask.title}
-                  onChange={(e) => setNewTask(p => ({ ...p, title: e.target.value }))}
-                  className="w-full px-3.5 py-2 rounded-xl border border-pink-200 text-xs focus:ring-2 focus:ring-pink-300 outline-none"
-                  required
-                />
-              </div>
-
+              <input type="text" placeholder="Tên hoạt động / Nhiệm vụ" value={newTask.title} onChange={(e) => setNewTask(p => ({ ...p, title: e.target.value }))} className="w-full px-3.5 py-2 rounded-xl border border-pink-200 text-xs" required />
+              
               <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">Nhóm Điều</label>
-                  <select
-                    value={newTask.groupId}
-                    onChange={(e) => setNewTask(p => ({ ...p, groupId: e.target.value }))}
-                    className="w-full px-2.5 py-2 rounded-xl border border-pink-200 text-xs font-medium"
-                  >
-                    {OU_CRITERIA_GROUPS.map(g => (
-                      <option key={g.id} value={g.id}>{g.title.slice(0, 18)}...</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">Điểm cộng</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="10"
-                    value={newTask.score}
-                    onChange={(e) => setNewTask(p => ({ ...p, score: e.target.value }))}
-                    className="w-full px-3 py-2 rounded-xl border border-pink-200 text-xs font-bold text-pink-600"
-                  />
-                </div>
+                <select value={newTask.groupId} onChange={(e) => setNewTask(p => ({ ...p, groupId: e.target.value }))} className="w-full px-2.5 py-2 rounded-xl border border-pink-200 text-xs">
+                  {OU_CRITERIA_GROUPS.map(g => <option key={g.id} value={g.id}>{g.title.slice(0, 18)}...</option>)}
+                </select>
+                <input type="number" min="1" max="10" value={newTask.score} onChange={(e) => setNewTask(p => ({ ...p, score: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-pink-200 text-xs font-bold text-pink-600" />
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Ngày tham gia</label>
-                <input
-                  type="date"
-                  value={newTask.date}
-                  onChange={(e) => setNewTask(p => ({ ...p, date: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-xl border border-pink-200 text-xs"
-                />
-              </div>
+              <input type="date" value={newTask.date} onChange={(e) => setNewTask(p => ({ ...p, date: e.target.value }))} className="w-full px-3 py-2 rounded-xl border border-pink-200 text-xs" />
 
-              {/* PHẦN UPLOAD NHIỀU ẢNH */}
               <div className="bg-pink-50/50 p-3 rounded-2xl border border-pink-100">
-                <label className="block text-xs font-semibold text-slate-600 mb-2">
-                  Upload Minh Chứng (Tối đa 10 ảnh/PDF, mỗi file ≤ 1MB)
-                </label>
+                <label className="block text-xs font-semibold text-slate-600 mb-2">Minh Chứng (Max 10 file ≤ 1MB)</label>
+                <input type="file" multiple accept="image/*,application/pdf" onChange={handleEvidenceFileUpload} disabled={newTask.evidences.length >= 10} className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-pink-100 file:text-pink-700" />
                 
-                {/* Nút chọn file */}
-                <input
-                  type="file"
-                  multiple
-                  accept="image/*,application/pdf"
-                  onChange={handleEvidenceFileUpload}
-                  disabled={newTask.evidences.length >= 10}
-                  className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-pink-100 file:text-pink-700 hover:file:bg-pink-200 disabled:opacity-50"
-                />
-                
-                {/* Danh sách ảnh đã chọn (Có nút X để xoá từng ảnh) */}
                 {newTask.evidences.length > 0 && (
                   <div className="mt-3 grid grid-cols-4 gap-2 max-h-40 overflow-y-auto pr-1">
-                    {newTask.evidences.map((ev, idx) => (
+                    {newTask.evidences.map((ev) => (
                       <div key={ev.id} className="relative group rounded-lg overflow-hidden border border-pink-200 bg-white aspect-square flex items-center justify-center">
-                        {ev.type === 'image' ? (
-                          <img src={ev.data} alt="evidence" className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="flex flex-col items-center text-pink-500">
-                            <Paperclip className="w-4 h-4" />
-                            <span className="text-[9px] font-bold mt-1">PDF</span>
-                          </div>
-                        )}
-                        
-                        {/* Nút Xoá Ảnh (hiện khi hover) */}
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveEvidence(ev.id)}
-                          className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition"
-                        >
-                          <X className="w-5 h-5 bg-red-500 rounded-full p-0.5" />
-                        </button>
+                        {ev.type === 'image' ? <img src={ev.data} alt="ev" className="w-full h-full object-cover" /> : <div className="text-center text-pink-500"><Paperclip className="w-4 h-4 mx-auto" /><span className="text-[9px] font-bold">PDF</span></div>}
+                        <button type="button" onClick={() => handleRemoveEvidence(ev.id)} className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white"><X className="w-5 h-5 bg-red-500 rounded-full p-0.5" /></button>
                       </div>
                     ))}
                   </div>
                 )}
-                <p className="text-[10px] text-slate-400 mt-2 text-right">
-                  Đã chọn: {newTask.evidences.length}/10 ảnh
-                </p>
+                <p className="text-[10px] text-slate-400 mt-2 text-right">Đã chọn: {newTask.evidences.length}/10</p>
               </div>
 
               <div className="pt-2 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAddTaskModal(false)}
-                  className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-2.5 rounded-xl bg-pink-500 hover:bg-pink-600 text-white text-xs font-bold shadow-md shadow-pink-200"
-                >
-                  Lưu Nhiệm Vụ
-                </button>
+                <button type="button" onClick={() => setShowAddTaskModal(false)} className="flex-1 py-2.5 rounded-xl bg-slate-100 text-slate-600 text-xs font-bold">Hủy</button>
+                <button type="submit" className="flex-1 py-2.5 rounded-xl bg-pink-500 text-white text-xs font-bold shadow-md">Lưu</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
+      {showAutoFillModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-5 shadow-2xl space-y-3">
+            <div className="flex justify-between items-center border-b pb-2">
+              <h3 className="font-bold text-slate-800 text-xs">Chọn Tài Khoản</h3>
+              <button onClick={() => setShowAutoFillModal(false)} className="text-slate-400 font-bold">✕</button>
+            </div>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {savedAccounts.map((acc, idx) => (
+                <div key={idx} onClick={() => handleSelectAutoFillAccount(acc)} className="p-3 rounded-2xl bg-pink-50 hover:bg-pink-100 cursor-pointer flex justify-between">
+                  <div><span className="font-bold text-slate-800 text-xs block">{acc.name}</span><span className="text-[11px] text-pink-600">MSSV: {acc.mssv}</span></div>
+                  <ChevronRight className="w-4 h-4 text-pink-400" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
